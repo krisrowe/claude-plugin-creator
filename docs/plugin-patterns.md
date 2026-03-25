@@ -109,7 +109,7 @@ service with local business logic.
 
 We use the official [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk)
 (`pip install mcp`) for both server and client. See
-[docs/mcp-framework.md](mcp-framework.md) for details on the SDK,
+[MCP framework](https://github.com/krisrowe/mcp/blob/main/docs/mcp-framework.md) for details on the SDK,
 how it relates to other packages in the ecosystem, and working examples.
 
 ### Server and client in one process

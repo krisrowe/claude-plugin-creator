@@ -28,8 +28,8 @@ For full details on patterns, framework choice, and proxy justification,
 read these supporting docs when the user asks "why" questions:
 
 - [Plugin patterns](${CLAUDE_SKILL_DIR}/../../docs/plugin-patterns.md) — self-installing pattern, alternatives considered, orchestration
-- [MCP framework](${CLAUDE_SKILL_DIR}/../../docs/mcp-framework.md) — which MCP SDK we use and why
-- [MCP proxy](${CLAUDE_SKILL_DIR}/../../docs/mcp-proxy.md) — whether tool proxying is appropriate, with authoritative sources
+- [MCP framework](https://github.com/krisrowe/mcp/blob/main/docs/mcp-framework.md) — which MCP SDK we use and why
+- [MCP proxy](https://github.com/krisrowe/mcp/blob/main/docs/mcp-proxy.md) — whether tool proxying is appropriate, with authoritative sources
 
 ## Step 1: Inspect the current repo
 
@@ -619,3 +619,138 @@ async def call_remote_tool(tool_name: str, arguments: dict) -> list:
   injected from local config
 - Handle auth header construction in one place (helper function),
   not per-tool
+
+## Version Management
+
+### plugin.json version
+
+The `version` field in `.claude-plugin/plugin.json` controls
+whether `claude plugin install` picks up changes. **If you change
+plugin code but don't bump the version, users won't see updates.**
+
+Claude Code caches installed plugins at `~/.claude/plugins/cache/`.
+The cache is keyed by version — same version = cached copy used,
+even if the source repo has changed.
+
+**Always bump the version when shipping changes:**
+
+```json
+{
+  "name": "my-plugin",
+  "description": "...",
+  "version": "1.1.0"
+}
+```
+
+Follow semver: patch for fixes, minor for new features/skills,
+major for breaking changes.
+
+### Update workflow for users
+
+```bash
+claude plugin marketplace update <marketplace-name>
+claude plugin install <plugin>@<marketplace> --scope user
+```
+
+If the install doesn't pick up changes, clear the cache:
+
+```bash
+rm -rf ~/.claude/plugins/cache/<marketplace>/
+claude plugin install <plugin>@<marketplace> --scope user
+```
+
+Then restart Claude Code.
+
+## Publishing to a Marketplace
+
+To make the plugin installable via `claude plugin install`, add
+it to a marketplace repo.
+
+### Find the developer's marketplace repo
+
+Check if the developer already has a marketplace repo by looking
+for repos with the `claude-plugins-marketplace` topic:
+
+```bash
+gh repo list --topic claude-plugins-marketplace --json name,url --jq '.[] | "\(.name) \(.url)"'
+```
+
+If found, use that repo. If not found, ask the developer:
+
+> I couldn't find a marketplace repo with the
+> `claude-plugins-marketplace` topic on your GitHub account.
+> Would you like me to create one? This is a public repo that
+> acts as an index of your plugins — users add it as a
+> marketplace source and install plugins from it.
+
+If they agree, create it with the topic so it's discoverable:
+
+```bash
+gh repo create <owner>/claude-plugins --public --description "Claude Code plugin marketplace"
+gh repo edit <owner>/claude-plugins --add-topic claude-plugins-marketplace
+```
+
+### Add to marketplace
+
+In the marketplace repo, add
+an entry to `.claude-plugin/marketplace.json`:
+
+```json
+{
+  "name": "my-plugin",
+  "source": {
+    "source": "git-subdir",
+    "url": "https://github.com/<owner>/<repo>.git",
+    "path": "."
+  },
+  "description": "Short description"
+}
+```
+
+Use `"source": "git-subdir"` with an HTTPS url. Do NOT use
+`"source": "github"` — it clones via SSH which requires SSH keys.
+Set `"path": "."` if plugin files are at the repo root, or a
+subdirectory path if they're nested.
+
+### Marketplace setup (for users who don't have it)
+
+```bash
+claude plugin marketplace add <marketplace-url>
+```
+
+### Install from marketplace
+
+```bash
+claude plugin marketplace update <marketplace-name>
+claude plugin install <plugin>@<marketplace> --scope user
+```
+
+### Formulate install commands from the discovered marketplace
+
+Once you've identified the marketplace repo (e.g.,
+`https://github.com/someuser/claude-plugins.git`), derive the
+marketplace name from the repo name (e.g., `claude-plugins`) and
+the plugin name from `marketplace.json`. Then provide the user
+with the full install sequence:
+
+```bash
+# One-time marketplace setup
+claude plugin marketplace add https://github.com/<owner>/<marketplace-repo>.git
+
+# Install the plugin
+claude plugin marketplace update <marketplace-repo>
+claude plugin install <plugin-name>@<marketplace-repo> --scope user
+```
+
+### After publishing updates
+
+1. Bump version in `.claude-plugin/plugin.json`
+2. Commit and push the plugin repo
+3. Users run `marketplace update` + `plugin install` to get the
+   new version
+4. If install doesn't pick up changes, clear cache and reinstall:
+   ```bash
+   rm -rf ~/.claude/plugins/cache/<marketplace>/
+   claude plugin install <plugin>@<marketplace> --scope user
+   ```
+5. Restart Claude Code
