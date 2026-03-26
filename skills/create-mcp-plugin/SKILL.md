@@ -692,25 +692,52 @@ gh repo edit <owner>/claude-plugins --add-topic claude-plugins-marketplace
 
 ### Add to marketplace
 
-In the marketplace repo, add
-an entry to `.claude-plugin/marketplace.json`:
+In the marketplace repo, add an entry to
+`.claude-plugin/marketplace.json`.
 
+**CRITICAL: Source type matters.** There are two source types
+with very different behavior:
+
+**`url` (RECOMMENDED for plugins at repo root):**
+```json
+{
+  "name": "my-plugin",
+  "source": {
+    "source": "url",
+    "url": "https://github.com/<owner>/<repo>.git",
+    "ref": "v1.0.0"
+  },
+  "description": "Short description"
+}
+```
+Clones the full repo at the tagged ref. All directories are
+present — skills, hooks, .claude-plugin, everything works.
+Use `ref` with a version tag (not a SHA — SHAs trigger
+precommit scanners as high-entropy strings).
+
+**`git-subdir` (ONLY for plugins nested in a subdirectory):**
 ```json
 {
   "name": "my-plugin",
   "source": {
     "source": "git-subdir",
     "url": "https://github.com/<owner>/<repo>.git",
-    "path": "."
+    "path": "claude/plugin"
   },
   "description": "Short description"
 }
 ```
+**WARNING:** `git-subdir` does a sparse checkout that only
+copies root-level files — **directories are excluded**. This
+means `skills/`, `hooks/`, and `.claude-plugin/` are NOT
+cached. The MCP server still works (installed via pip by the
+SessionStart hook) but skills and hooks are broken. Only use
+this when the plugin lives in a subdirectory of a larger repo
+and you have no alternative. Prefer restructuring the repo to
+put plugin files at root and using `url` source instead.
 
-Use `"source": "git-subdir"` with an HTTPS url. Do NOT use
-`"source": "github"` — it clones via SSH which requires SSH keys.
-Set `"path": "."` if plugin files are at the repo root, or a
-subdirectory path if they're nested.
+Do NOT use `"source": "github"` — it clones via SSH which
+requires SSH keys.
 
 ### Marketplace setup (for users who don't have it)
 
@@ -744,13 +771,37 @@ claude plugin install <plugin-name>@<marketplace-repo> --scope user
 
 ### After publishing updates
 
+Full release workflow:
+
 1. Bump version in `.claude-plugin/plugin.json`
 2. Commit and push the plugin repo
-3. Users run `marketplace update` + `plugin install` to get the
-   new version
-4. If install doesn't pick up changes, clear cache and reinstall:
+3. Tag the release and push the tag:
    ```bash
-   rm -rf ~/.claude/plugins/cache/<marketplace>/
+   git tag v1.2.0
+   git push origin v1.2.0
+   ```
+4. Update the marketplace `ref` to the new tag:
+   ```json
+   "ref": "v1.2.0"
+   ```
+5. Commit and push the marketplace repo
+6. Clear the local plugin cache (required — reinstall alone
+   may not pick up changes due to caching bugs):
+   ```bash
+   rm -rf ~/.claude/plugins/cache/<marketplace>/<plugin-name>
+   ```
+7. Reinstall:
+   ```bash
+   claude plugin marketplace update <marketplace-name>
    claude plugin install <plugin>@<marketplace> --scope user
    ```
-5. Restart Claude Code
+8. Restart Claude Code
+9. Verify with `/skills` — all skills should appear
+
+**Common gotchas:**
+- Forgetting to push the tag before marketplace update →
+  clone fails silently, old version loaded
+- Not clearing cache → old version served even after
+  marketplace update and reinstall
+- Using `git-subdir` source → skills directories not cached
+  (switch to `url` source with `ref` tag)
