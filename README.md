@@ -3,6 +3,22 @@
 A Claude Code plugin for scaffolding and testing new plugins that bundle
 self-installing local MCP servers.
 
+## Why this exists
+
+Claude Code plugins can bundle an MCP server alongside skills and hooks
+into a single installable unit — no separate `pipx install`, no
+`claude mcp add`, no manual setup. But getting the configuration right
+is tricky: the `SessionStart` hook must install Python dependencies into
+an isolated `site-packages` using `python3 -m pip` (not `pip`, which
+doesn't exist on macOS), the `.mcp.json` must set `PYTHONPATH` to that
+directory, and the server must be invocable from any working directory
+via `${CLAUDE_PLUGIN_ROOT}`.
+
+This plugin generates all of that correctly. It scaffolds a working
+plugin with an MCP server, a skill, and a dependency hook — tested
+end-to-end — so you can rename the sample tool and start building
+your real plugin on a known-good foundation.
+
 ## Install
 
 ```bash
