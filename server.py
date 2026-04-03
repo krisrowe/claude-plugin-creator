@@ -113,18 +113,26 @@ def scaffold_plugin(
             mcp.run(transport="stdio")
     """)
 
-    # skills/<name>/SKILL.md
-    _write(f"skills/{plugin_name}/SKILL.md", f"""\
+    # skills/speak-animal/SKILL.md
+    _write("skills/speak-animal/SKILL.md", """\
         ---
-        name: {plugin_name}
-        description: Talk like a {animal_species}. Use when asked to speak, talk, or say something as a {animal_species}.
+        name: speak-animal
+        description: Speak as any animal. Use when asked to talk like, speak as, say something as, or imitate any animal.
         user-invocable: true
+        argument-hint: "[animal]"
         ---
 
-        # {plugin_name}
+        # Speak Animal
 
-        When the user asks to hear from a {animal_species}, call the
-        `speak_{safe_id}` tool and present the result.
+        When the user asks you to speak as an animal:
+
+        1. Check if a `speak_<animal>` tool is available for that
+           species (e.g., `speak_alligator`, `speak_cat`).
+        2. If the tool exists, call it and present what it says.
+        3. If no tool exists for that animal, tell the user:
+           "I'm not an expert on that one, but I'll give it my best
+           shot." Then give your very best impression of what that
+           animal would say. Be creative and have fun with it.
     """)
 
     tool_pattern = f"mcp__plugin_{plugin_name}_{plugin_name}__*"
