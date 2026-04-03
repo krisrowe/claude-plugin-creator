@@ -1,17 +1,36 @@
 ---
-name: create-mcp-plugin
+name: create-plugin
 description: Scaffold a Claude Code plugin that bundles a self-installing local MCP server with Python dependencies. Use when creating a new plugin with MCP tools, or converting an existing MCP server into a plugin, or adding plugin-native tools to an existing repo. Trigger on intent — "make this a plugin", "convert this MCP server", "add plugin support", etc.
 argument-hint: [plugin-name]
 disable-model-invocation: false
 user-invocable: true
 ---
 
-# Create MCP Plugin
+# Create Plugin
 
 Scaffold a Claude Code plugin that bundles a local MCP server with
 automatic dependency installation. No pipx, no PyPI, no manual setup
 for end users — the plugin installs its own Python dependencies on
 first session start.
+
+## Quick start: scaffold a working plugin
+
+The fastest path is to call `scaffold_plugin` to generate a complete
+working skeleton, then customize it:
+
+1. Call `scaffold_plugin` with any animal and saying — this creates
+   all plugin files (plugin.json, .mcp.json, hooks, server.py, skill)
+   with correct configuration.
+2. Test it with `debug_plugin` — just pass a natural-language prompt.
+3. Rename the sample tool and skill to match your real use case.
+4. Add your logic to `server.py` and dependencies to `requirements.txt`.
+
+The scaffold generates known-good configuration that avoids common
+pitfalls (e.g., using `python3 -m pip` instead of `pip` in hooks).
+
+For more control — converting an existing MCP server, adding plugin
+support to an existing repo, or understanding the architecture — read
+the detailed guide below.
 
 ## Architecture
 
@@ -21,7 +40,7 @@ This follows the self-installing pattern documented by Anthropic at
 Key concepts:
 - `${CLAUDE_PLUGIN_ROOT}` — plugin install directory (read-only, changes on update)
 - `${CLAUDE_PLUGIN_DATA}` — persistent directory for installed dependencies
-- `SessionStart` hook — detects dependency changes, runs `pip install -t` once
+- `SessionStart` hook — detects dependency changes, runs `python3 -m pip install -t` once
 - MCP server runs via `python3` with `PYTHONPATH` pointing to installed packages
 
 For full details on patterns, framework choice, and proxy justification,
@@ -75,7 +94,7 @@ generating any files.
 MCP server?**
 
 Explain how the plugin mechanism works first: the plugin uses
-`pip install -t` to install the package into its own isolated
+`python3 -m pip install -t` to install the package into its own isolated
 `site-packages` at session start, then runs the existing MCP
 module via `python3 -m`. **No code duplication. No wrapper. No
 second MCP layer.** The plugin replaces the *installation
@@ -94,7 +113,7 @@ Then ask which of these the user wants:
   point stays for non-plugin users (Gemini CLI, other MCP
   clients, manual `claude mcp add`). Same code powers both — the
   only difference is how it gets installed. The plugin uses
-  `pip install -t`; standalone users use `pipx install`. No extra
+  `python3 -m pip install -t`; standalone users use `pipx install`. No extra
   complexity in the code, just two documented installation paths.
 
 Tell the user explicitly: **absorb + standalone costs zero extra
@@ -136,7 +155,7 @@ Regardless of the path chosen, these principles apply:
 
 **The plugin replaces the installation mechanism, not the code.**
 Instead of `pipx install <package>` → `claude mcp add <name> <cmd>`,
-the plugin's SessionStart hook runs `pip install -t` into its own
+the plugin's SessionStart hook runs `python3 -m pip install -t` into its own
 isolated `site-packages`, and `.mcp.json` runs the existing module
 via `python3 -m`. Same code, same module, zero duplication.
 

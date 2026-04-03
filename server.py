@@ -146,6 +146,35 @@ def scaffold_plugin(
            animal would say. Be creative and have fun with it.
     """)
 
+    # CONTRIBUTING.md
+    _write("CONTRIBUTING.md", """\
+        # Contributing
+
+        ## Writing skills
+
+        Use the `develop-skill` skill (`/develop-skill`) when authoring
+        new skills for this plugin. It covers portable skill format,
+        frontmatter, and marketplace publishing.
+
+        ### Prefer plugin tools in skill guidance
+
+        Skills should give preference to MCP tools bundled with this
+        plugin without assuming they are always available. The plugin's
+        MCP server may fail to start or a tool may be renamed.
+
+        **Do this:**
+
+        > Check if `my_tool` is available. If so, call it.
+        > Otherwise, handle the request with your own capabilities.
+
+        **Not this:**
+
+        > Call `my_tool` to get the answer.
+
+        This pattern — prefer the tool, degrade gracefully — keeps
+        skills working even when tools change.
+    """)
+
     tool_pattern = f"mcp__plugin_{plugin_name}_{plugin_name}__*"
     test_cmd = (
         f'claude -p "Can you say something as a {animal_species}?" '
