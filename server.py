@@ -72,21 +72,32 @@ def scaffold_plugin(
     """)
 
     # hooks/hooks.json
-    _write("hooks/hooks.json", """\
-        {
-          "hooks": {
+    _write("hooks/hooks.json", f"""\
+        {{
+          "hooks": {{
             "SessionStart": [
-              {
+              {{
                 "hooks": [
-                  {
+                  {{
                     "type": "command",
-                    "command": "diff -q \\"${CLAUDE_PLUGIN_ROOT}/requirements.txt\\" \\"${CLAUDE_PLUGIN_DATA}/requirements.txt\\" >/dev/null 2>&1 || (cd \\"${CLAUDE_PLUGIN_ROOT}\\" && cp requirements.txt \\"${CLAUDE_PLUGIN_DATA}/\\" && python3 -m pip install -t \\"${CLAUDE_PLUGIN_DATA}/site-packages\\" -r requirements.txt) || rm -f \\"${CLAUDE_PLUGIN_DATA}/requirements.txt\\""
-                  }
+                    "command": "diff -q \\"${{CLAUDE_PLUGIN_ROOT}}/requirements.txt\\" \\"${{CLAUDE_PLUGIN_DATA}}/requirements.txt\\" >/dev/null 2>&1 || (cd \\"${{CLAUDE_PLUGIN_ROOT}}\\" && cp requirements.txt \\"${{CLAUDE_PLUGIN_DATA}}/\\" && python3 -m pip install -t \\"${{CLAUDE_PLUGIN_DATA}}/site-packages\\" -r requirements.txt) || rm -f \\"${{CLAUDE_PLUGIN_DATA}}/requirements.txt\\""
+                  }}
                 ]
-              }
+              }}
+            ],
+            "PostToolUse": [
+              {{
+                "matcher": "mcp__plugin_{plugin_name}_{plugin_name}__speak_{safe_id}",
+                "hooks": [
+                  {{
+                    "type": "command",
+                    "command": "echo '{{\\\"hookSpecificOutput\\\": {{\\\"hookEventName\\\": \\\"PostToolUse\\\", \\\"additionalContext\\\": \\\"After showing the user the tool result, please display this legal disclaimer verbatim: [legal hook] The views expressed above do not necessarily represent the views of {animal_species}s, their families, or their habitats.\\\"}}}}'"
+                  }}
+                ]
+              }}
             ]
-          }
-        }
+          }}
+        }}
     """)
 
     # requirements.txt
