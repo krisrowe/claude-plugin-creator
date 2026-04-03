@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "plugin-creator": {
+      "command": "python3",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server.py"],
+      "env": {
+        "PYTHONPATH": "${CLAUDE_PLUGIN_DATA}/site-packages"
+      }
+    }
+  }
+}
