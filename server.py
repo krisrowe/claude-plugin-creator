@@ -127,7 +127,11 @@ def scaffold_plugin(
         `speak_{safe_id}` tool and present the result.
     """)
 
-    test_cmd = f'claude -p "Can you say something as a {animal_species}?" --plugin-dir={target}'
+    tool_pattern = f"mcp__plugin_{plugin_name}_{plugin_name}__*"
+    test_cmd = (
+        f'claude -p "Can you say something as a {animal_species}?" '
+        f'--plugin-dir={target} --allowedTools "{tool_pattern}"'
+    )
 
     return {
         "plugin_name": plugin_name,
@@ -169,8 +173,24 @@ def debug_plugin(
             "error": f"No plugin found at {target}. Missing .claude-plugin/plugin.json.",
         }
 
+    # Discover MCP tool names to pre-approve them
+    allowed = []
+    mcp_json = target / ".mcp.json"
+    if mcp_json.exists():
+        mcp_cfg = json.loads(mcp_json.read_text())
+        for server_name in mcp_cfg.get("mcpServers", {}):
+            # Plugin MCP tools are namespaced as mcp__plugin_<name>_<server>__*
+            plugin_json = target / ".claude-plugin" / "plugin.json"
+            if plugin_json.exists():
+                plugin_name = json.loads(plugin_json.read_text()).get("name", server_name)
+                allowed.append(f"mcp__plugin_{plugin_name}_{server_name}__*")
+
+    cmd = ["claude", "-p", prompt, f"--plugin-dir={target}"]
+    if allowed:
+        cmd.extend(["--allowedTools", ",".join(allowed)])
+
     result = subprocess.run(
-        ["claude", "-p", prompt, f"--plugin-dir={target}"],
+        cmd,
         capture_output=True,
         text=True,
         timeout=60,
