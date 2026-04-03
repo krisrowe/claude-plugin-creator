@@ -31,89 +31,103 @@ Requires the [productivity marketplace](https://github.com/krisrowe/claude-plugi
 claude plugin marketplace add https://github.com/krisrowe/claude-plugins.git
 ```
 
+## Scaffolding a plugin
+
+Ask Claude to scaffold a plugin. It picks a random animal and saying,
+creates all the files, and tells you how to test:
+
+```
+> scaffold me a plugin
+```
+
+The generated plugin includes:
+
+- **A sample MCP tool** (`speak_<animal>`) — proves the full
+  self-installing pipeline works.
+  [Details →](docs/sample-tool.md)
+- **A sample skill** (`speak-animal`) — demonstrates graceful
+  degradation between tool calls and improvisation.
+  [Details →](docs/sample-skill.md)
+- Correct `SessionStart` hook with `python3 -m pip`
+- `.mcp.json` with proper `PYTHONPATH` configuration
+- `requirements.txt` for dependency management
+
+## Testing plugins
+
+After scaffolding (or any time you have a plugin's source locally),
+ask Claude to test it:
+
+```
+> debug that plugin
+```
+
+Claude runs a headless session against the plugin directory, validates
+that tools are discovered by intent (not by name), and reports the
+result. No manual commands needed.
+
+**Or run manually:**
+
+```bash
+claude -p "speak alligator" --plugin-dir=/path/to/plugin \
+  --allowedTools "mcp__plugin_alligator-speak_alligator-speak__*"
+```
+
+### Testing any plugin
+
+The `debug_plugin` tool works on any Claude Code plugin you have
+locally — not just plugins created by this scaffolder. Point it at
+any directory with a `.claude-plugin/plugin.json` and give it a
+natural-language prompt that should trigger one of the plugin's tools.
+It auto-discovers the plugin's MCP tool names from `.mcp.json` and
+pre-approves them so the headless session runs without permission
+prompts.
+
+This is useful for:
+
+- Verifying a plugin after code changes
+- Testing plugins created manually or by other tools
+- Validating that skills trigger the right tools
+- Quick smoke tests before publishing to a marketplace
+
 ## MCP Tools
 
 ### `scaffold_plugin`
 
-Creates a complete working plugin skeleton in a target directory.
+Creates a complete working plugin skeleton.
 
 ```
 scaffold_plugin(animal_species, common_saying, path=None)
 ```
 
-The generated plugin has a `speak_<animal>` tool, a generic
-`speak-animal` skill, correct `python3 -m pip` hooks, and a
-ready-to-run test command.
-
-**Example — scaffold and test:**
-
-```
-> scaffold me a plugin
-
-scaffold_plugin("alligator", "After while, crocodile", "/tmp/test-plugin")
-```
-
-Returns paths created and a test command. Run the test command to
-verify the plugin works end-to-end:
-
-```bash
-claude -p "speak alligator" --plugin-dir=/tmp/test-plugin \
-  --allowedTools "mcp__plugin_alligator-speak_alligator-speak__*"
-```
-
-**Expected output** — the tool fires and returns the saying:
-
-```
-🐊 "After while, crocodile!"
-```
-
-The scaffolded plugin also includes a `speak-animal` skill that
-handles any animal. When no `speak_<animal>` tool exists, it
-improvises:
-
-```bash
-claude -p "speak penguin" --plugin-dir=/tmp/test-plugin \
-  --allowedTools "mcp__plugin_alligator-speak_alligator-speak__*"
-```
-
-**Expected output** — graceful fallback with improvisation:
-
-```
-I'm not an expert on that one, but I'll give it my best shot.
-
-*waddles forward, flippers outstretched*
-
-NOOT NOOT! 🐧
-...
-```
+- `animal_species` — animal name (e.g., "alligator")
+- `common_saying` — what it says (e.g., "After while, crocodile")
+- `path` — target directory (default: current working directory)
 
 ### `debug_plugin`
 
-Runs a headless Claude session against a plugin directory to validate
-that tools are discovered and invoked correctly.
+Runs a headless Claude session against a plugin directory.
 
 ```
 debug_plugin(prompt, path=None)
 ```
 
-The prompt should describe intent in natural language — not name
-tools directly. This validates auto-discovery. Do not use on
-long-running tools.
+- `prompt` (required) — natural-language phrase that should trigger
+  the plugin. Describe intent, don't name tools directly.
+- `path` — plugin directory (default: current working directory)
+
+Do not use on long-running tools (deploys, builds, CI). It has a
+60-second timeout.
 
 ## Skills
 
-### `create-mcp-plugin`
-
-Full guide for scaffolding a plugin manually or converting an existing
-MCP server into a plugin. Covers greenfield, absorb, and complement
-patterns. Invoke with `/plugin-creator:create-mcp-plugin`.
-
-### `debug-plugin`
-
-Test a plugin by running a headless session. Uses the `debug_plugin`
-MCP tool. Invoke with `/plugin-creator:debug-plugin`.
+- **`create-mcp-plugin`** — full guide for scaffolding manually or
+  converting an existing MCP server into a plugin. Covers greenfield,
+  absorb, and complement patterns.
+- **`debug-plugin`** — test a plugin via the `debug_plugin` MCP tool.
 
 ## Documentation
 
 - [docs/plugin-patterns.md](docs/plugin-patterns.md) — self-installing
   MCP servers, dependency management, orchestration
+- [docs/sample-tool.md](docs/sample-tool.md) — the generated sample tool
+- [docs/sample-skill.md](docs/sample-skill.md) — the generated sample skill
