@@ -29,6 +29,46 @@ Skills teach the agent *when* and *how* to orchestrate. Tools do
 the actual work. If a skill would need to tell the agent to shell
 out to run Python code, that's a missing tool.
 
+## Bundling vs. external: help the user decide
+
+If the user maintains their own MCP server in a separate repo,
+they may wonder whether to bundle it into the plugin or register
+it as an external dependency. Present the tradeoffs:
+
+**Bundling (recommended for most cases):**
+
+- **Single-line install.** The whole point of a plugin is that
+  `claude plugin install` gives the user everything they need —
+  tools, skills, hooks — as an integrated set of capabilities for
+  a specific workflow. No separate installs, no registration steps.
+- **Co-versioned.** The plugin's skills, hooks, and tools all move
+  together. A skill that references a tool always gets the right
+  version of that tool.
+- **Works everywhere the plugin does.** Any machine, any project —
+  install the plugin and the tools are there.
+- **Still independently deployable.** Bundling into a plugin doesn't
+  prevent independent use. The same repo can have a `pyproject.toml`
+  with `[project.scripts]` for standalone `pipx install`, AND be
+  bundled into a plugin via `requirements.txt` containing `.`. Both
+  paths run the same code. The plugin is just an additional
+  distribution mechanism, not a replacement.
+- **Still independently developable.** The MCP server repo stays its
+  own repo with its own tests, CI, and releases. The plugin references
+  it — it doesn't absorb the source.
+
+**External registration (for specific cases):**
+
+- The server is maintained by a third party and you can't bundle it
+- The server is shared across multiple plugins and should be
+  registered once, not duplicated
+- The server requires its own installation step that can't be
+  automated by a SessionStart hook (e.g., system-level dependencies)
+
+**Bottom line:** If the user controls the server's source and the
+plugin represents a cohesive workflow, bundle it. The user can
+still install and use the server independently — bundling adds a
+distribution path, it doesn't remove one.
+
 ## Step 1: Inspect the plugin
 
 Check what the plugin already has:
