@@ -66,6 +66,11 @@ claude plugin marketplace update <marketplace-name>
 claude plugin install <plugin-name>@<marketplace-name> --scope user
 ```
 
+**Important:** If the plugin has an MCP server, the new tools won't
+appear until the next Claude Code session. The MCP server connects
+at session start and does not hot-reload. Tell the user to start a
+new session after reinstalling.
+
 ### 6. Verify
 
 Check the cache has the new version:

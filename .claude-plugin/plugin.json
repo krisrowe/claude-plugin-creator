@@ -1,5 +1,5 @@
 {
   "name": "plugin-creator",
   "description": "Scaffold Claude Code plugins with self-installing local MCP servers",
-  "version": "1.6.0"
+  "version": "1.7.0"
 }
