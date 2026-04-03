@@ -187,6 +187,97 @@ guidance on writing skills that reference plugin tools.
 Use the `develop-skill` skill (`/develop-skill`) when authoring or
 updating skills.
 
+## Alternative: Register an external MCP server
+
+The steps above are for bundling a new MCP server *inside* the plugin.
+There is a different scenario: the user already has an existing MCP
+server whose source is maintained separately — by a third party or by
+the user in another repo for independent deployment and use outside
+the plugin context — and they want the plugin to ensure that server
+is registered and available in Claude whenever the plugin is active.
+
+This is much simpler. No `server.py`, no `requirements.txt`, no
+`SessionStart` hook for dependency installation. The plugin just
+registers the external server in `.mcp.json`.
+
+### For a locally installed server (stdio)
+
+The server is already installed on the user's machine (e.g., via
+`pipx install` or `npm install -g`). Add it to `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "<server-name>": {
+      "command": "<command>",
+      "args": ["<args>"],
+      "env": {
+        "SOME_VAR": "${SOME_VAR}"
+      }
+    }
+  }
+}
+```
+
+The command must be on the user's PATH. If the server isn't
+installed, it will fail to start — the plugin doesn't manage
+installation. Consider documenting prerequisites in the plugin's
+README.
+
+Environment variables in `.mcp.json` support `${VAR}` expansion
+and `${VAR:-default}` for fallbacks. These resolve from the user's
+shell environment at session start.
+
+### For a remote server (HTTP)
+
+The server runs elsewhere (Cloud Run, a SaaS provider, etc.).
+Use `"type": "http"` with a URL:
+
+```json
+{
+  "mcpServers": {
+    "<server-name>": {
+      "type": "http",
+      "url": "https://example.com/mcp"
+    }
+  }
+}
+```
+
+If the server requires authentication, add headers:
+
+```json
+{
+  "mcpServers": {
+    "<server-name>": {
+      "type": "http",
+      "url": "${API_BASE_URL:-https://example.com}/mcp",
+      "headers": {
+        "Authorization": "Bearer ${API_KEY}"
+      }
+    }
+  }
+}
+```
+
+The `${API_KEY}` and `${API_BASE_URL}` values come from the user's
+environment. If a required variable is not set and has no default,
+the config fails to parse. Document which environment variables
+users need to set in the plugin's README or add a setup skill.
+
+### Key difference
+
+| | Bundled server | External server |
+|---|---|---|
+| Source lives in | This plugin repo | Separate repo or third party |
+| Installed by | Plugin's SessionStart hook | User (pipx, npm, etc.) or hosted remotely |
+| Versioned with | The plugin | Independently |
+| Works offline | Yes (stdio, local) | Depends on transport |
+| `.mcp.json` points to | `${CLAUDE_PLUGIN_ROOT}/server.py` | External command or URL |
+| Needs `requirements.txt` | Yes | No |
+| Needs `SessionStart` hook | Yes (for deps) | No |
+| Auth/config | Handled in code | Via `env`, `headers`, or `${VAR}` expansion |
+
 ## Common issues
 
 - **MCP server not starting:** Check that `.mcp.json` exists at the
