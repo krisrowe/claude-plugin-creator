@@ -150,6 +150,18 @@ def scaffold_plugin(
     _write("CONTRIBUTING.md", """\
         # Contributing
 
+        ## Plugin design patterns
+
+        This plugin follows the conventions documented in
+        [plugin-creator's plugin patterns](https://github.com/echomodel/claude-plugin-creator/blob/main/docs/plugin-patterns.md)
+        — MCP server install shape, cache-invalidation signals,
+        skill composition and orchestration via the agent .md, and
+        antipatterns to avoid.
+
+        Preserve those patterns when modifying this plugin. When a
+        design question comes up, consult the canonical patterns doc
+        rather than reinventing or duplicating guidance here.
+
         ## Writing skills
 
         Use the `develop-skill` skill (`/develop-skill`) when authoring
@@ -188,7 +200,14 @@ def scaffold_plugin(
         "test_command": test_cmd,
         "next_steps": (
             f"The plugin is ready. Rename speak_{safe_id} to your real tool, "
-            f"or test it now with:\n  ! {test_cmd}"
+            f"or test it now with:\n  ! {test_cmd}\n\n"
+            "Recommended: install plugin-creator into this plugin's repo at "
+            "project scope so future sessions working on it load the patterns "
+            "guidance automatically:\n"
+            f"  ! cd {target} && claude plugin install plugin-creator@echomodel --scope project\n"
+            "(First time only on this machine, run:\n"
+            "  ! claude plugin marketplace add https://github.com/echomodel/claude-plugins.git\n"
+            "before the install.)"
         ),
     }
 

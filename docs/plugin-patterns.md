@@ -98,6 +98,184 @@ The self-installing pattern is superior for local-only tools because:
 - No external package registry (PyPI) required
 - Dependencies auto-update when the plugin updates
 
+## Install-pattern variants and antipattern
+
+The self-installing pattern above is the **recommended** shape. Two variants and one antipattern are worth naming explicitly because they look similar and produce very different outcomes.
+
+### Recommended: direct-source + explicit-deps
+
+The pattern already documented above:
+
+- Source runs **directly from `${CLAUDE_PLUGIN_ROOT}`** — `.mcp.json` points at `${CLAUDE_PLUGIN_ROOT}/server.py` (or equivalent), no copy step
+- `requirements.txt` lists **only external dependencies** (e.g., `mcp>=1.0.0`), not `.` or the plugin itself
+- Install hook uses `diff -q requirements.txt` to detect changes — file-content signal, not version string
+- Only third-party deps end up in `${CLAUDE_PLUGIN_DATA}/site-packages`
+
+Result: source can never drift because it isn't duplicated. The only thing that can go out of sync is the dependency set, which the `diff` check catches.
+
+### Antipattern: `requirements.txt = .` with version-string cache invalidation
+
+```
+# DON'T DO THIS
+requirements.txt:
+.
+
+hook compares __version__ from the source against a cached installed_version file
+```
+
+This pattern installs the **plugin's own source** into site-packages alongside its deps, producing a second copy that can drift from the plugin cache. The drift is invisible until symptoms appear.
+
+Why it breaks:
+
+- `pip install .` copies the plugin source into `${CLAUDE_PLUGIN_DATA}/site-packages/<plugin>/`, creating a duplicate of what's already at `${CLAUDE_PLUGIN_ROOT}`
+- The hook's comparison (e.g., `__version__` in `__init__.py` vs a cached `installed_version` file) can report "already installed" when the cache file is stale but the site-packages contents don't match the current source (e.g., install was partial, the marketplace refreshed the cache after the installed_version was written, or the version string didn't change even though the code did)
+- User runs `.mcp.json`'s `python3 -m <package>.server` which imports from `PYTHONPATH=${CLAUDE_PLUGIN_DATA}/site-packages` — picking up the stale copy, not the fresh plugin cache
+- Debugging this is painful because the plugin looks installed (files are there, version string matches), but the code is old
+
+Version strings are proxies for "content changed." They require human discipline to stay accurate and can silently lie. File diffs and content hashes are computed from reality and can't.
+
+Real-world symptom pattern: a plugin bumps its version and pushes a new release. The marketplace refreshes the cache. Sessions restart. Users see "still behaves like the old version" despite `plugin list` showing the new version number — because site-packages was never rewritten.
+
+### Future: uvx + pyproject.toml dual distribution
+
+An emerging alternative that supports both plugin use and standalone (non-plugin) use from the same source:
+
+```json
+{
+  "mcpServers": {
+    "my-tool": {
+      "command": "uvx",
+      "args": ["--from", "${CLAUDE_PLUGIN_ROOT}", "my-tool-mcp"]
+    }
+  }
+}
+```
+
+With a matching `pyproject.toml`:
+
+```toml
+[project]
+name = "my-tool"
+dependencies = ["mcp", ...]
+
+[project.scripts]
+my-tool-mcp = "my_tool.server:main"
+```
+
+[`uvx`](https://docs.astral.sh/uv/guides/tools/) (part of [`uv`](https://docs.astral.sh/uv/)) creates an isolated environment from the local path, installs the package + deps, and runs the declared entry point. uv handles cache invalidation internally based on source and metadata, so no custom install hook is needed.
+
+Advantages over the direct-source + explicit-deps pattern:
+
+- **Dual distribution from one repo**: the same `pyproject.toml` that serves the plugin also makes the package installable standalone via `pipx install git+<url>@<tag>`, giving users a non-plugin path (any MCP client, not just Claude Code) without duplicating code across repos.
+- **No custom install hook**: uv's cache handles reinstall decisions automatically.
+- **Entry points are declarative**: `[project.scripts]` is the source of truth for commands, usable by both the plugin and standalone install.
+
+Tradeoffs:
+
+- Requires `uv` on the user's PATH. `uv` is rapidly becoming the standard for Python tool-running ([Claude Code docs recommend `uvx`](https://code.claude.com/docs/en/mcp)), and installs trivially (`brew install uv` or a curl script), but it's not yet guaranteed on every machine.
+- First launch is slower than a pre-installed package (uv creates the env), but subsequent launches are fast thanks to aggressive caching.
+- If the plugin has no standalone-distribution ambition, this adds dependencies (`uv`, `pyproject.toml`) without commensurate benefit over direct-source + explicit-deps.
+
+### Comparison
+
+| Property | Direct-source + explicit-deps (recommended) | `pip install .` + version-string cache (antipattern) | uvx + pyproject.toml (future) |
+|---|---|---|---|
+| Source duplication risk | None (source runs from ROOT) | High (source copied to site-packages) | None (uv env references source) |
+| Cache invalidation signal | File-content diff (reliable) | Version string (proxy, can lie) | uv-managed (reliable) |
+| Custom install hook required | Yes (small, content-based) | Yes (custom, version-based) | No (uv handles it) |
+| Works as standalone MCP server outside the plugin | Manual venv + pip (possible but clunky) | Same, with drift risk | One-liner via `pipx install` or `uvx --from` |
+| Dep manifest | `requirements.txt` (external deps only) | `pyproject.toml` or `requirements.txt` | `pyproject.toml` (standard) |
+| External tool requirement | python3 + pip | python3 + pip | python3 + uv |
+| Ecosystem alignment | Matches [Anthropic's self-installing recommendation](https://code.claude.com/docs/en/plugins-reference#persistent-data-directory) | Legacy / pre-uvx workaround | Matches [Claude Code docs on MCP invocation](https://code.claude.com/docs/en/mcp) and Python tooling trend |
+
+**Current recommendation**: direct-source + explicit-deps. Move to uvx + pyproject.toml when:
+
+- A new plugin needs dual distribution from day one
+- Or the plugin has existing or imminent demand for standalone MCP server use outside Claude Code
+- Or the ecosystem reaches a point where `uv` availability is ambient (on par with `python3`)
+
+## Plugin as orchestration: the bundling guarantee
+
+A plugin is more than a bundle of skills. It's an **all-or-nothing unit** that enables orchestration patterns individual skills can't safely do alone.
+
+### The problem with skill-to-skill cross-references
+
+Standalone skills — those distributed individually via a marketplace, a skills install CLI, or manual copy — must function when installed alone, without assuming any sibling skill is present. This means:
+
+- A skill can't confidently say "when you finish here, invoke skill X" because skill X may not be installed
+- Cross-references must be soft hints, not structural dependencies
+- Multi-skill workflows have no way to enforce order or completeness across skill boundaries
+- Skills either duplicate content from their neighbors (fighting DRY) or live with broken references (fighting reliability)
+
+### How plugins lift the constraint
+
+A plugin bundles a set of skills **together**. When the plugin is installed, every skill it declares is present. When it isn't, none of them are.
+
+This turns a collection of loosely-coupled skills into a cohesive product. Inside the plugin's scope — its agent definition (`agents/<name>.md`) and its bundled skills — the plugin knows exactly which sibling skills exist. It can orchestrate them with confidence.
+
+### The agent .md orchestration pattern
+
+Claude Code plugins can ship agent definition files (e.g., `agents/<agent-name>.md`) that declare preloaded skills in frontmatter and provide orchestration in the body.
+
+```markdown
+---
+name: my-agent
+description: ...
+skills:
+  - step-one-skill
+  - step-two-skill
+  - final-step-skill
+---
+
+# My Agent
+
+You help users accomplish <workflow>. The workflow has three stages:
+
+## Stage 1 — preparation
+Use `step-one-skill` before starting any real work.
+
+## Stage 2 — execution
+...
+
+## Stage 3 — verification
+Before marking the task done, invoke `final-step-skill` to confirm ...
+```
+
+Two narrow jobs for the agent .md:
+
+1. **Preload** critical skills via the `skills:` frontmatter so their content is in context from the start of every session. This guarantees the model has them without relying on frontmatter-based discovery.
+2. **Orchestrate** via a thin, high-level workflow outline in the body that names other skills at the moments they apply, with short summaries of what each one does and when to invoke it.
+
+### Design principle: avoid a monolith
+
+The agent .md is explicitly NOT the place to pack the full content of every skill. Skills remain the source of truth for their respective domains. The agent .md's orchestration is intentionally redundant with skills' own descriptions — the redundancy is a safety net for imperfect skill discovery, not a substitute for the skills themselves.
+
+When writing or extending an agent .md:
+
+- Does the content belong in a specific skill? → put it in the skill, reference it from the agent .md with a short summary
+- Is it workflow-level orchestration that crosses skill boundaries? → goes in the agent .md body
+- Is it a critical skill that should always be in context? → add to frontmatter `skills:`
+- Otherwise → probably belongs in a skill, not here
+
+### Why this belongs in plugins specifically
+
+Without the plugin's bundling guarantee, the same orchestration discipline is unsafe:
+
+- A skill with hard references to siblings breaks when sibling is missing
+- A standalone "orchestrator skill" doesn't have the guarantee either — it still depends on siblings being installed
+- No other Claude Code mechanism provides "these skills are guaranteed present" scope for orchestration to rely on
+
+So: multi-skill workflows that need reliable cross-references belong in a plugin, and the plugin's agent .md is where the orchestration lives. Plugins don't just deliver skills — they deliver **composed workflows** that couldn't exist otherwise.
+
+### When to use this pattern
+
+- A plugin offers a set of skills that work better together than alone
+- The skills compose into a multi-step workflow with natural ordering
+- You want to ensure certain skills are always loaded in context (not just discoverable) when the plugin is active
+- Cross-skill references need to be reliable, not conditional
+
+Plugins with a single skill, or skills that are genuinely independent, don't need this pattern. It's for products that compose.
+
 ## MCP Orchestration
 
 A plugin's MCP server can act as both server (exposing tools to Claude)

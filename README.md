@@ -22,13 +22,13 @@ your real plugin on a known-good foundation.
 ## Install
 
 ```bash
-claude plugin install plugin-creator@productivity
+claude plugin install plugin-creator@echomodel --scope project
 ```
 
-Requires the [productivity marketplace](https://github.com/krisrowe/claude-plugins):
+Requires the [echomodel plugins marketplace](https://github.com/echomodel/claude-plugins):
 
 ```bash
-claude plugin marketplace add https://github.com/krisrowe/claude-plugins.git
+claude plugin marketplace add https://github.com/echomodel/claude-plugins.git
 ```
 
 ## Scaffolding a plugin
@@ -125,9 +125,44 @@ Do not use on long-running tools (deploys, builds, CI). It has a
   absorb, and complement patterns.
 - **`debug-plugin`** — test a plugin via the `debug_plugin` MCP tool.
 
+## Plugin design patterns
+
+plugin-creator promotes a set of patterns for how plugin source,
+dependencies, and skills are packaged and composed — both in the
+plugins it scaffolds and in plugins authors work on with its help
+(via its skills, agent .md, and documentation loaded into context).
+Full details in the [plugin patterns doc](docs/plugin-patterns.md).
+Summaries:
+
+- **[Self-installing MCP servers](docs/plugin-patterns.md#self-installing-mcp-servers)**
+  — the scaffolder generates a plugin that runs its MCP server source
+  directly from the plugin cache, with a `SessionStart` hook that
+  installs only external dependencies (no duplicating source to
+  site-packages). Cache invalidation uses a file-content diff, not a
+  version string. This avoids the drift class of bugs where a plugin
+  reports the right version but runs stale code.
+
+- **[Install-pattern variants and antipattern](docs/plugin-patterns.md#install-pattern-variants-and-antipattern)**
+  — comparison of the recommended direct-source + explicit-deps pattern,
+  the `pip install .` + version-string antipattern that causes silent
+  drift, and the emerging `uvx` + `pyproject.toml` pattern for dual
+  distribution (plugin + standalone pipx-installable MCP server from one
+  repo). The scaffolder currently uses the recommended direct-source
+  pattern; a move to `uvx` is under consideration for plugins that need
+  dual distribution.
+
+- **[Plugin as orchestration: the bundling guarantee](docs/plugin-patterns.md#plugin-as-orchestration-the-bundling-guarantee)**
+  — a plugin delivers composed workflows, not just a bundle of skills.
+  Because a plugin is installed as an all-or-nothing unit, its skills
+  are guaranteed to co-exist, which lets the plugin's agent definition
+  (`agents/<name>.md`) safely orchestrate them with preloaded skills
+  and cross-references that standalone skills couldn't rely on. This
+  is how multi-step workflows across skill boundaries stay reliable.
+
 ## Documentation
 
-- [docs/plugin-patterns.md](docs/plugin-patterns.md) — self-installing
-  MCP servers, dependency management, orchestration
+- [plugin patterns](docs/plugin-patterns.md) — self-installing
+  MCP servers, install-pattern variants and antipattern, plugin-as-
+  orchestration with the bundling guarantee, MCP orchestration
 - [docs/sample-tool.md](docs/sample-tool.md) — the generated sample tool
 - [docs/sample-skill.md](docs/sample-skill.md) — the generated sample skill
