@@ -134,6 +134,8 @@ Why it breaks:
 
 Version strings are proxies for "content changed." They require human discipline to stay accurate and can silently lie. File diffs and content hashes are computed from reality and can't.
 
+The version-string compare has a second, subtler failure mode that makes it fragile even independent of the `requirements.txt = .` problem above: it compounds with outer plugin-cache staleness. Claude Code decides whether to refresh the cached plugin on disk by looking at `.claude-plugin/plugin.json`'s `version` field. If a plugin author forgets to bump that field before tagging a release, the outer plugin cache never updates — and when the outer cache is stale, the in-package version string the `SessionStart` hook reads is coming from the SAME stale source file. Both sides of the compare reference the same old value, the hook reports "no change," and `pip install` never runs. Users reinstall the plugin, see no errors, and believe they picked up the update. A `requirements.txt`-diff trigger avoids this because the diff is against an artifact the hook itself controls — the cached `requirements.txt` under `${CLAUDE_PLUGIN_DATA}` — not against a field inside the potentially-stale plugin source.
+
 Real-world symptom pattern: a plugin bumps its version and pushes a new release. The marketplace refreshes the cache. Sessions restart. Users see "still behaves like the old version" despite `plugin list` showing the new version number — because site-packages was never rewritten.
 
 ### Future: uvx + pyproject.toml dual distribution

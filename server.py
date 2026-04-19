@@ -162,6 +162,20 @@ def scaffold_plugin(
         design question comes up, consult the canonical patterns doc
         rather than reinventing or duplicating guidance here.
 
+        ### Install-trigger pattern (short version)
+
+        The `SessionStart` hook in `hooks/hooks.json` uses a
+        `requirements.txt` file-content diff against a cached copy
+        under `${CLAUDE_PLUGIN_DATA}` to decide whether to run
+        `pip install`. Do not replace this with a compare against an
+        in-package version string (e.g., `__version__` in a source
+        file). That proxy signal can silently lie when the outer
+        plugin cache is also stale — both sides of the compare end up
+        reading the same stale source and the hook reports "no change"
+        when dependencies actually need reinstalling. See the
+        [patterns doc](https://github.com/echomodel/claude-plugin-creator/blob/main/docs/plugin-patterns.md#install-pattern-variants-and-antipattern)
+        for the full failure-mode analysis.
+
         ## Writing skills
 
         Use the `develop-skill` skill (`/develop-skill`) when authoring
